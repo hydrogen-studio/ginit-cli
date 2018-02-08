@@ -1,6 +1,6 @@
 {
   "name": "ginit-cli",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "cli for easy `git init`ing",
   "license": "MIT",
   "repository": "timdavish/ginit-cli",
@@ -23,12 +23,9 @@
     "chalk": "^2.3.0",
     "github": "^13.1.0",
     "inquirer": "^5.1.0",
-    "lodash": "^4.13.1",
     "meow": "^4.0.0",
-    "minimist": "^1.2.0",
-    "preferences": "^0.2.1",
-    "simple-git": "^1.89.0",
-    "touch": "^1.0.0"
+    "preferences": "^1.0.2",
+    "simple-git": "^1.89.0"
   },
   "devDependencies": {
     "ava": "^0.25.0",

@@ -6,13 +6,12 @@ const meow = require('meow');
 const inquirer = require('inquirer');
 const github = require('github')();
 const simpleGit = require('simple-git')();
-
 const Preferences = require('preferences');
-const _ = require('lodash');
-const touch = require('touch');
-const fs = require('fs');
 
 const files = require('./lib/files');
+const pkg = require('./package.json');
+
+const prefs = new Preferences('ginit');
 
 const cli = meow({
   description: false,
@@ -72,10 +71,54 @@ function run (input, flags) {
   }
 }
 
-function runAuth () {}
+async function runAuth () {
+  const { username, password } = await promptAuth();
+
+  github.authenticate({ type: 'basic', username, password });
+
+  await github.authorization.create({
+    scopes: ['user', 'public_repo', 'repo', 'repo:status'],
+    note: 'ginit: cli for easy `git init`ing',
+    fingerprint: `ginit v${pkg.version}`
+  }, (err, res) => {
+    if (err) {
+      switch (err.code) {
+        case 401:
+          console.log(chalk.red('Couldn\'t log you in. Please try again.'));
+          break;
+        case 422:
+          console.log(chalk.red('You already have an access token.'));
+          console.log(`Try revoking your ginit access token and then trying again.`);
+          console.log('  url: https://github.com/settings/tokens');
+          break;
+      }
+    } else if (res.data.token) {
+      prefs.github = {
+        token: res.data.token
+      };
+      console.log(chalk.green('Successfully authenticated.'));
+    }
+  });
+}
+
+function promptAuth () {
+  return inquirer.prompt([
+    {
+      name: 'username',
+      message: 'Enter your Github username or e-mail address:',
+      type: 'input',
+      validate: val => val.length ? true : 'Input required'
+    },
+    {
+      name: 'password',
+      message: 'Enter your password:',
+      type: 'password',
+      validate: val => val.length ? true : 'Input required'
+    }
+  ])
+}
 
 async function runInit (interactive, force) {
-  const prefs = new Preferences('ginit');
   const token = prefs.github ? prefs.github.token : false;
 
   if (!token) {
@@ -93,34 +136,43 @@ async function runInit (interactive, force) {
     process.exit(1);
   }
 
-  authenticate(token);
+  github.authenticate({ type: 'oauth', token });
 
   const data = {};
 
   if (interactive) {
     const { name, description, visibility } = await promptCreateQuestions();
+
     data.name = name;
     data.description = description;
     data.private = (visibility === 'private');
 
-    await promptFileQuestions(name);
+    const { wantReadme, wantIgnore } = await promptFileQuestions(name);
+
+    if (wantReadme) {
+      const content = `# ${name}`;
+
+      files.createFile('README.md', content);
+    }
+    if (wantIgnore) {
+      const defaults = [
+        'node_modules',
+        '.DS_Store',
+        '*.log'
+      ];
+
+      files.createFile('.gitignore', defaults.join('\n'));
+    }
   }
 
   try {
     const { data: repoData } = await createRepository(data);
     const fileStatus = await setupRepository(repoData.ssh_url);
 
-    console.log(chalk.green('Repository initalized ${fileStatus}.'));
+    console.log(chalk.green(`Repository initalized ${fileStatus}.`));
   } catch (e) {
     console.log(chalk.red(e));
   }
-}
-
-function authenticate (token) {
-  github.authenticate({
-    type: 'oauth',
-    token
-  })
 }
 
 function createRepository (data) {
@@ -149,13 +201,13 @@ function setupRepository (url) {
 }
 
 function promptCreateQuestions () {
-  const createQuestions = [
+  return inquirer.prompt([
     {
       name: 'name',
       message: 'Enter a name for the repository:',
       type: 'input',
       default: files.getCurrentDirectoryBase(),
-      validate: val => val.length ? true : 'Name is required'
+      validate: val => val.length ? true : 'Input required'
     },
     {
       name: 'description',
@@ -170,239 +222,20 @@ function promptCreateQuestions () {
       choices: [ 'public', 'private' ],
       default: 'public'
     }
-  ];
-
-  return inquirer.prompt(createQuestions);
+  ]);
 }
 
-async function promptFileQuestions (name) {
-  const { wantReadme } = await inquirer.prompt([{
-    name: 'wantReadme',
-    message: 'Do you want to create a README.md?',
-    type: 'confirm'
-  }]);
-
-  if (wantReadme) {
-    const content = `# ${name}`;
-
-    files.createFile('README.md', content);
-  }
-
-  const { wantIgnore } = await inquirer.prompt([{
-    name: 'wantIgnore',
-    message: 'Do you want to create a .gitignore?',
-    type: 'confirm'
-  }]);
-
-  if (wantIgnore) {
-    const defaults = [
-      'node_modules',
-      '.DS_Store',
-      '*.log'
-    ];
-
-    files.createFile('.gitignore', defaults.join('\n'));
-  }
-}
-
-
-
-const argv = require('minimist')(process.argv.slice(2));
-
-function getGithubCredentials(callback) {
-  const questions = [
+function promptFileQuestions (name) {
+  return inquirer.prompt([
     {
-      name: 'username',
-      type: 'input',
-      message: 'Enter your Github username or e-mail address:',
-      validate: val => val.length ? true : 'Input required'
+      name: 'wantReadme',
+      message: 'Do you want to create a README.md?',
+      type: 'confirm'
     },
     {
-      name: 'password',
-      type: 'password',
-      message: 'Enter your password:',
-      validate: val => val.length ? true : 'Input required'
+      name: 'wantIgnore',
+      message: 'Do you want to create a .gitignore?',
+      type: 'confirm'
     }
-  ];
-
-  inquirer.prompt(questions).then(callback);
+  ]);
 }
-
-function getGithubToken(callback) {
-  const prefs = new Preferences('ginit');
-
-  if (prefs.github && prefs.github.token) {
-    return callback(null, prefs.github.token);
-  }
-
-  getGithubCredentials(function (credentials) {
-
-    github.authenticate(
-      _.extend(
-        {
-          type: 'basic',
-        },
-        credentials
-      )
-    );
-
-    github.authorization.create({
-      scopes: ['user', 'public_repo', 'repo', 'repo:status'],
-      note: 'ginit, the command-line tool for initalizing Git repos',
-      fingerprint: 'ginit.'
-    }, function (err, res) {
-      if (err) {
-        return callback(err);
-      }
-      if (res.token) {
-        prefs.github = {
-          token : res.token
-        };
-        return callback(null, res.token);
-      }
-      return callback();
-    });
-  });
-}
-
-function createRepo(callback) {
-  const questions = [
-    {
-      type: 'input',
-      name: 'name',
-      message: 'Enter a name for the repository:',
-      default: argv._[0] || files.getCurrentDirectoryBase(),
-      validate: val => val.length ? true : 'Input required'
-    },
-    {
-      type: 'input',
-      name: 'description',
-      default: argv._[1] || null,
-      message: 'Optionally enter a description of the repository:'
-    },
-    {
-      type: 'list',
-      name: 'visibility',
-      message: 'Public or private:',
-      choices: [ 'public', 'private' ],
-      default: 'public'
-    }
-  ];
-
-  inquirer.prompt(questions).then(function (answers) {
-    const data = {
-      name : answers.name,
-      description : answers.description,
-      private : (answers.visibility === 'private')
-    };
-
-    github.repos.create(
-      data,
-      function (err, res) {
-        if (err) {
-          return callback(err);
-        }
-        return callback(null, res.ssh_url);
-      }
-    );
-  });
-}
-
-function createInitialFiles(callback) {
-  const readmeQuestion = [{
-    type: 'confirm',
-    name: 'wantReadme',
-    message: 'Do you want to create a README.md?'
-  }];
-
-  inquirer.prompt(readmeQuestion).then(function (answers) {
-    return answers.wantReadme;
-  }).then(function (wantReadme) {
-    if (wantReadme) {
-      fs.writeFileSync('README.md', `# ${argv._[0] || files.getCurrentDirectoryBase()}`);
-    }
-  }).then(function () {
-    const filelist = _.without(fs.readdirSync('.'), '.git', '.gitignore');
-
-    if (filelist.length) {
-      inquirer.prompt(
-        [
-          {
-            type: 'checkbox',
-            name: 'ignore',
-            message: 'Select the files and/or folders you wish to ignore:',
-            choices: filelist,
-            default: ['node_modules', 'bower_components']
-          }
-        ]
-      ).then(function (answers) {
-          if (answers.ignore.length) {
-            fs.writeFileSync('.gitignore', answers.ignore.join('\n'));
-          } else {
-            touch('.gitignore');
-          }
-          return callback();
-        }
-      );
-    } else {
-      touch('.gitignore');
-      return callback();
-    }
-  });
-}
-
-function setupRepo(url, callback) {
-  git
-    .init()
-    .add('.gitignore')
-    .add('./*')
-    .commit('Initial commit')
-    .addRemote('origin', url)
-    .push('origin', 'master')
-    .then(function () {
-      return callback();
-    });
-}
-
-function githubAuth(callback) {
-  getGithubToken(function (err, token) {
-    if (err) {
-      return callback(err);
-    }
-    github.authenticate({
-      type : 'oauth',
-      token : token
-    });
-    return callback(null, token);
-  });
-}
-
-// githubAuth(function (err, authed) {
-//   if (err) {
-//     switch (err.code) {
-//       case 401:
-//         console.log(chalk.red('Couldn\'t log you in. Please try again.'));
-//         break;
-//       case 422:
-//         console.log(chalk.red('You already have an access token.'));
-//         break;
-//     }
-//   }
-//   if (authed) {
-//     console.log(chalk.green('Successfully authenticated!'));
-//     createRepo(function (err, url) {
-//       if (err) {
-//         console.log('An error has occured');
-//       }
-//       if (url) {
-//         createInitialFiles(function () {
-//           setupRepo(url, function (err) {
-//             if (!err) {
-//               console.log(chalk.green('All done!'));
-//             }
-//           });
-//         });
-//       }
-//     });
-//   }
-// });
