@@ -2,29 +2,142 @@
 "use strict";
 
 const chalk = require('chalk');
-const clear = require('clear');
-const clui = require('clui');
-const figlet = require('figlet');
+const meow = require('meow');
 const inquirer = require('inquirer');
+const github = require('github')();
+const simpleGit = require('simple-git')();
+
 const Preferences = require('preferences');
-const GitHubApi = require('github');
 const _ = require('lodash');
-const git = require('simple-git')();
 const touch = require('touch');
 const fs = require('fs');
+
 const files = require('./lib/files');
 
-clear();
-console.log(chalk.yellow(figlet.textSync('Ginit - GLI', { horizontalLayout: 'full' })));
+const cli = meow({
+  description: false,
+  help: `
+    Usage
+      ${chalk.yellow('ginit [command] [option]')}
 
-if (files.directoryExists('.git')) {
-  console.log(chalk.red('This directory is already a git repository. Exiting.'));
-  process.exit();
+      The command argument is optional. If no command is given, the
+      init command will be run.
+
+    Commands
+      ${chalk.yellow('auth')}                 Sign into github
+      ${chalk.yellow('init')}                 Initialize current directory as git repository
+
+    Options
+      ${chalk.yellow('--interactive, -i')}    Enter interactive mode
+      ${chalk.yellow('--force, -f')}          Force initialization
+      ${chalk.yellow('--version, -v')}        Print version
+      ${chalk.yellow('--help, -h')}           Print help
+
+    Examples
+      ginit auth           ${chalk.dim('# Sign into github')}
+      ginit                ${chalk.dim('# Initialize current directory as git repository')}
+      ginit -i             ${chalk.dim('# Enter interactive mode')}
+  `,
+  flags: {
+    interactive: {
+      type: 'boolean',
+      alias: 'i'
+    },
+    force: {
+      type: 'boolean',
+      alias: 'f'
+    },
+    version: {
+      type: 'boolean',
+      alias: 'v'
+    },
+    help: {
+      type: 'boolean',
+      alias: 'h'
+    }
+  }
+});
+
+run(cli.input, cli.flags);
+
+function run (input, flags) {
+  const command = input[0];
+  const interactive = flags.interactive;
+  const force = flags.force;
+
+  switch (command) {
+    case 'auth': return runAuth();
+    case 'init':
+    default: return runInit(interactive, force);
+  }
 }
 
+function runAuth () {}
+
+function runInit (interactive, force) {
+  const prefs = new Preferences('ginit');
+  const token = prefs.github ? prefs.github.token : false;
+  const hasFiles = files.directoryHasFiles('.');
+
+  if (!token) {
+    console.log(chalk.red('Unauthorized. Please ensure you are logged in using `ginit auth`.'));
+    process.exit(1);
+  }
+
+  if (files.directoryExists('.git')) {
+    console.log(chalk.red('This directory is already a git repository. Exiting.'));
+    process.exit(1);
+  }
+
+  if (!hasFiles && !interactive && !force) {
+    console.log(chalk.red('This directory has no files to commit. Try running in interactive or force modes.'));
+    process.exit(1);
+  }
+
+  authenticate(token);
+
+  if (!interactive) {
+    const repoData = createRepository();
+    setupRepository(repoData.ssh_url, hasFiles);
+  } else {
+    // Do current prompt session
+  }
+
+  console.log(chalk.green('Repository initalized.'))
+}
+
+function authenticate (token) {
+  github.authenticate({
+    type: 'oauth',
+    token
+  })
+}
+
+async function createRepository () {
+  const data = {
+    name: files.getCurrentDirectoryBase(),
+    private: false
+  }
+  const response = await github.repos.create(data);
+
+  return response.data;
+}
+
+async function setupRepository (url, hasFiles) {
+  if (hasFiles) {
+    simpleGit.init()
+      .add('.')
+      .commit('Initial commit')
+      .addRemote('origin', url)
+      .push('origin', 'master')
+  } else {
+    simpleGit.init()
+      .addRemote('origin', url)
+  }
+}
+
+
 const argv = require('minimist')(process.argv.slice(2));
-const github = new GitHubApi({ version: '3.0.0' });
-const Spinner = clui.Spinner;
 
 function getGithubCredentials(callback) {
   const questions = [
@@ -53,8 +166,6 @@ function getGithubToken(callback) {
   }
 
   getGithubCredentials(function (credentials) {
-    const status = new Spinner('Authenticating you, please wait...');
-    status.start();
 
     github.authenticate(
       _.extend(
@@ -70,7 +181,6 @@ function getGithubToken(callback) {
       note: 'ginit, the command-line tool for initalizing Git repos',
       fingerprint: 'ginit.'
     }, function (err, res) {
-      status.stop();
       if (err) {
         return callback(err);
       }
@@ -110,9 +220,6 @@ function createRepo(callback) {
   ];
 
   inquirer.prompt(questions).then(function (answers) {
-    const status = new Spinner('Creating repository...');
-    status.start();
-
     const data = {
       name : answers.name,
       description : answers.description,
@@ -122,7 +229,6 @@ function createRepo(callback) {
     github.repos.create(
       data,
       function (err, res) {
-        status.stop();
         if (err) {
           return callback(err);
         }
@@ -176,9 +282,6 @@ function createInitialFiles(callback) {
 }
 
 function setupRepo(url, callback) {
-  const status = new Spinner('Setting up the repository...');
-  status.start();
-
   git
     .init()
     .add('.gitignore')
@@ -187,7 +290,6 @@ function setupRepo(url, callback) {
     .addRemote('origin', url)
     .push('origin', 'master')
     .then(function () {
-      status.stop();
       return callback();
     });
 }
@@ -205,32 +307,32 @@ function githubAuth(callback) {
   });
 }
 
-githubAuth(function (err, authed) {
-  if (err) {
-    switch (err.code) {
-      case 401:
-        console.log(chalk.red('Couldn\'t log you in. Please try again.'));
-        break;
-      case 422:
-        console.log(chalk.red('You already have an access token.'));
-        break;
-    }
-  }
-  if (authed) {
-    console.log(chalk.green('Successfully authenticated!'));
-    createRepo(function (err, url) {
-      if (err) {
-        console.log('An error has occured');
-      }
-      if (url) {
-        createInitialFiles(function () {
-          setupRepo(url, function (err) {
-            if (!err) {
-              console.log(chalk.green('All done!'));
-            }
-          });
-        });
-      }
-    });
-  }
-});
+// githubAuth(function (err, authed) {
+//   if (err) {
+//     switch (err.code) {
+//       case 401:
+//         console.log(chalk.red('Couldn\'t log you in. Please try again.'));
+//         break;
+//       case 422:
+//         console.log(chalk.red('You already have an access token.'));
+//         break;
+//     }
+//   }
+//   if (authed) {
+//     console.log(chalk.green('Successfully authenticated!'));
+//     createRepo(function (err, url) {
+//       if (err) {
+//         console.log('An error has occured');
+//       }
+//       if (url) {
+//         createInitialFiles(function () {
+//           setupRepo(url, function (err) {
+//             if (!err) {
+//               console.log(chalk.green('All done!'));
+//             }
+//           });
+//         });
+//       }
+//     });
+//   }
+// });
