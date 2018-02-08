@@ -74,10 +74,9 @@ function run (input, flags) {
 
 function runAuth () {}
 
-function runInit (interactive, force) {
+async function runInit (interactive, force) {
   const prefs = new Preferences('ginit');
   const token = prefs.github ? prefs.github.token : false;
-  const hasFiles = files.directoryHasFiles('.');
 
   if (!token) {
     console.log(chalk.red('Unauthorized. Please ensure you are logged in using `ginit auth`.'));
@@ -89,21 +88,32 @@ function runInit (interactive, force) {
     process.exit(1);
   }
 
-  if (!hasFiles && !interactive && !force) {
+  if (!files.directoryHasFiles('.') && !interactive && !force) {
     console.log(chalk.red('This directory has no files to commit. Try running in interactive or force modes.'));
     process.exit(1);
   }
 
   authenticate(token);
 
-  if (!interactive) {
-    const repoData = createRepository();
-    setupRepository(repoData.ssh_url, hasFiles);
-  } else {
-    // Do current prompt session
+  const data = {};
+
+  if (interactive) {
+    const { name, description, visibility } = await promptCreateQuestions();
+    data.name = name;
+    data.description = description;
+    data.private = (visibility === 'private');
+
+    await promptFileQuestions(name);
   }
 
-  console.log(chalk.green('Repository initalized.'))
+  try {
+    const { data: repoData } = await createRepository(data);
+    const fileStatus = await setupRepository(repoData.ssh_url);
+
+    console.log(chalk.green('Repository initalized ${fileStatus}.'));
+  } catch (e) {
+    console.log(chalk.red(e));
+  }
 }
 
 function authenticate (token) {
@@ -113,28 +123,88 @@ function authenticate (token) {
   })
 }
 
-async function createRepository () {
-  const data = {
-    name: files.getCurrentDirectoryBase(),
-    private: false
+function createRepository (data) {
+  if (!data.name) {
+    data.name = files.getCurrentDirectoryBase();
   }
-  const response = await github.repos.create(data);
 
-  return response.data;
+  return github.repos.create(data);
 }
 
-async function setupRepository (url, hasFiles) {
-  if (hasFiles) {
+function setupRepository (url) {
+  if (files.directoryHasFiles('.')) {
     simpleGit.init()
       .add('.')
       .commit('Initial commit')
       .addRemote('origin', url)
       .push('origin', 'master')
+
+    return 'with files';
   } else {
     simpleGit.init()
       .addRemote('origin', url)
+
+    return 'without files';
   }
 }
+
+function promptCreateQuestions () {
+  const createQuestions = [
+    {
+      name: 'name',
+      message: 'Enter a name for the repository:',
+      type: 'input',
+      default: files.getCurrentDirectoryBase(),
+      validate: val => val.length ? true : 'Name is required'
+    },
+    {
+      name: 'description',
+      message: 'Enter a description for the repository (optional):',
+      type: 'input',
+      default: null
+    },
+    {
+      name: 'visibility',
+      message: 'Public or private:',
+      type: 'list',
+      choices: [ 'public', 'private' ],
+      default: 'public'
+    }
+  ];
+
+  return inquirer.prompt(createQuestions);
+}
+
+async function promptFileQuestions (name) {
+  const { wantReadme } = await inquirer.prompt([{
+    name: 'wantReadme',
+    message: 'Do you want to create a README.md?',
+    type: 'confirm'
+  }]);
+
+  if (wantReadme) {
+    const content = `# ${name}`;
+
+    files.createFile('README.md', content);
+  }
+
+  const { wantIgnore } = await inquirer.prompt([{
+    name: 'wantIgnore',
+    message: 'Do you want to create a .gitignore?',
+    type: 'confirm'
+  }]);
+
+  if (wantIgnore) {
+    const defaults = [
+      'node_modules',
+      '.DS_Store',
+      '*.log'
+    ];
+
+    files.createFile('.gitignore', defaults.join('\n'));
+  }
+}
+
 
 
 const argv = require('minimist')(process.argv.slice(2));
