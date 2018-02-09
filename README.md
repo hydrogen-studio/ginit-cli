@@ -16,8 +16,8 @@ $ ginit --help
   Usage
     ginit [command] [option]
 
-    The command argument is optional. If no command is given, the
-    init command will be run.
+    The command argument is optional. If no command is provided,
+    then the init command will be run by default.
 
   Commands
     auth                 Sign into github

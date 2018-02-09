@@ -19,8 +19,8 @@ const cli = meow({
     Usage
       ${chalk.yellow('ginit [command] [option]')}
 
-      The command argument is optional. If no command is given, the
-      init command will be run.
+      The command argument is optional. If no command is provided,
+      then the ${chalk.yellow('init')} command will be run by default.
 
     Commands
       ${chalk.yellow('auth')}                 Sign into github
