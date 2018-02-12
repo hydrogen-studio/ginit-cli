@@ -101,23 +101,6 @@ async function runAuth () {
   });
 }
 
-function promptAuth () {
-  return inquirer.prompt([
-    {
-      name: 'username',
-      message: 'Enter your Github username or e-mail address:',
-      type: 'input',
-      validate: val => val.length ? true : 'Input required'
-    },
-    {
-      name: 'password',
-      message: 'Enter your password:',
-      type: 'password',
-      validate: val => val.length ? true : 'Input required'
-    }
-  ])
-}
-
 async function runInit (interactive, force) {
   const token = prefs.github ? prefs.github.token : false;
 
@@ -175,29 +158,21 @@ async function runInit (interactive, force) {
   }
 }
 
-function createRepository (data) {
-  if (!data.name) {
-    data.name = files.getCurrentDirectoryBase();
-  }
-
-  return github.repos.create(data);
-}
-
-function setupRepository (url) {
-  if (files.directoryHasFiles('.')) {
-    simpleGit.init()
-      .add('.')
-      .commit('Initial commit')
-      .addRemote('origin', url)
-      .push('origin', 'master')
-
-    return 'with files';
-  } else {
-    simpleGit.init()
-      .addRemote('origin', url)
-
-    return 'without files';
-  }
+function promptAuth () {
+  return inquirer.prompt([
+    {
+      name: 'username',
+      message: 'Enter your Github username or e-mail address:',
+      type: 'input',
+      validate: val => val.length ? true : 'Input required'
+    },
+    {
+      name: 'password',
+      message: 'Enter your password:',
+      type: 'password',
+      validate: val => val.length ? true : 'Input required'
+    }
+  ])
 }
 
 function promptCreateQuestions () {
@@ -238,4 +213,29 @@ function promptFileQuestions (name) {
       type: 'confirm'
     }
   ]);
+}
+
+function createRepository (data) {
+  if (!data.name) {
+    data.name = files.getCurrentDirectoryBase();
+  }
+
+  return github.repos.create(data);
+}
+
+function setupRepository (url) {
+  if (files.directoryHasFiles('.')) {
+    simpleGit.init()
+      .add('.')
+      .commit('Initial commit')
+      .addRemote('origin', url)
+      .push('origin', 'master')
+
+    return 'with files';
+  } else {
+    simpleGit.init()
+      .addRemote('origin', url)
+
+    return 'without files';
+  }
 }
