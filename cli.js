@@ -130,7 +130,7 @@ async function runInit (interactive, force) {
     data.description = description;
     data.private = (visibility === 'private');
 
-    const { wantReadme, wantIgnore, wantAttributes } = await promptFileQuestions(name);
+    const { wantReadme, wantIgnore, wantAttributes, wantEditorConfig } = await promptFileQuestions(name);
 
     if (wantReadme) {
       const content = `# ${name}`;
@@ -153,6 +153,21 @@ async function runInit (interactive, force) {
       ];
 
       files.createFile('.gitattributes', defaults.join('\n'));
+    }
+    if (wantEditorConfig) {
+      const defaults = [
+        'root = true',
+        '',
+        '[*]',
+        'charset = utf-8',
+        'indent_style = space',
+        'indent_size = 2',
+        'end_of_line = lf',
+        'insert_final_newline = true',
+        'trim_trailing_whitespace = true'
+      ];
+
+      files.createFile('.editorconfig', defaults.join('\n'));
     }
   }
 
@@ -223,6 +238,11 @@ function promptFileQuestions (name) {
     {
       name: 'wantAttributes',
       message: 'Do you want to create a .gitattributes?',
+      type: 'confirm'
+    },
+    {
+      name: 'wantEditorConfig',
+      message: 'Do you want to create a .editorconfig?',
       type: 'confirm'
     }
   ]);
