@@ -130,7 +130,7 @@ async function runInit (interactive, force) {
     data.description = description;
     data.private = (visibility === 'private');
 
-    const { wantReadme, wantIgnore } = await promptFileQuestions(name);
+    const { wantReadme, wantIgnore, wantAttributes } = await promptFileQuestions(name);
 
     if (wantReadme) {
       const content = `# ${name}`;
@@ -145,6 +145,14 @@ async function runInit (interactive, force) {
       ];
 
       files.createFile('.gitignore', defaults.join('\n'));
+    }
+    if (wantAttributes) {
+      const defaults = [
+        '* text=auto',
+        '*.js text eol=lf'
+      ];
+
+      files.createFile('.gitattributes', defaults.join('\n'));
     }
   }
 
@@ -210,6 +218,11 @@ function promptFileQuestions (name) {
     {
       name: 'wantIgnore',
       message: 'Do you want to create a .gitignore?',
+      type: 'confirm'
+    },
+    {
+      name: 'wantAttributes',
+      message: 'Do you want to create a .gitattributes?',
       type: 'confirm'
     }
   ]);
