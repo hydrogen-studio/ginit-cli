@@ -10,7 +10,7 @@ $ npm install -g ginit-cli
 
 ## Usage
 
-```bash
+```
 $ ginit --help
 
   Usage
