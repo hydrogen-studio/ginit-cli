@@ -1,6 +1,6 @@
 {
   "name": "ginit-cli",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "cli for easy `git init`ing",
   "license": "MIT",
   "repository": "timdavish/ginit-cli",

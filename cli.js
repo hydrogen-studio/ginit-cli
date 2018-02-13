@@ -133,15 +133,19 @@ async function runInit (interactive, force) {
     const { wantReadme, wantIgnore, wantAttributes, wantEditorConfig } = await promptFileQuestions(name);
 
     if (wantReadme) {
-      const content = `# ${name}`;
+      const defaults = [
+        `# ${name}`,
+        ''
+      ];
 
-      files.createFile('README.md', content);
+      files.createFile('README.md', defaults.join('\n'));
     }
     if (wantIgnore) {
       const defaults = [
         'node_modules',
         '.DS_Store',
-        '*.log'
+        '*.log',
+        ''
       ];
 
       files.createFile('.gitignore', defaults.join('\n'));
@@ -149,7 +153,8 @@ async function runInit (interactive, force) {
     if (wantAttributes) {
       const defaults = [
         '* text=auto',
-        '*.js text eol=lf'
+        '*.js text eol=lf',
+        ''
       ];
 
       files.createFile('.gitattributes', defaults.join('\n'));
@@ -164,7 +169,8 @@ async function runInit (interactive, force) {
         'indent_size = 2',
         'end_of_line = lf',
         'insert_final_newline = true',
-        'trim_trailing_whitespace = true'
+        'trim_trailing_whitespace = true',
+        ''
       ];
 
       files.createFile('.editorconfig', defaults.join('\n'));
