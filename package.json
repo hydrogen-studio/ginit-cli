@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "cli for easy `git init`ing",
   "license": "MIT",
-  "repository": "timdavish/ginit-cli",
   "author": "Hydrogen Studio",
   "engines": {
     "node": ">=8"
