@@ -1,10 +1,10 @@
 {
-  "name": "ginit-cli",
-  "version": "2.1.0",
+  "name": "git-commands-interface",
+  "version": "1.0.0",
   "description": "cli for easy `git init`ing",
   "license": "MIT",
   "repository": "timdavish/ginit-cli",
-  "author": "Tim Davis",
+  "author": "Hydrogen Studio",
   "engines": {
     "node": ">=8"
   },
@@ -19,6 +19,7 @@
     "init",
     "cli"
   ],
+  "publishConfig": { "registry": "https://npm.pkg.github.com/" },
   "dependencies": {
     "chalk": "^2.3.0",
     "github": "^13.1.0",
